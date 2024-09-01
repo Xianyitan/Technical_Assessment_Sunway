@@ -10,3 +10,5 @@ An attempt at creating a RAG chatbot with FLAN-T5-Large, uploaded for review des
 
 4. Ollama_Langchain_RAG_Chatbot (Challenge 3)
 A successful RAG chatbot solution using the open-source Ollama model (Mistral) with a Streamlit interface, handling PDF inputs effectively.
+
+** For the bonus challenge, I didn't create any code algorithm, I wrote it in the pdf file I provided.
