@@ -115,13 +115,14 @@ def process_question(question: str, vector_db: Chroma, selected_model: str) -> s
         vector_db.as_retriever(), llm, prompt=QUERY_PROMPT
     )
     
-    template = """Answer the question based ONLY on the following context:
-    {context}
+    template = """Answer the question based on the following context if it is relevant to the question. 
+    If the question is about the system or the document in general, you can answer without the context.
+    Context: {context}
     Question: {question}
-    If you don't know the answer, just say that you don't know, don't try to make up an answer.
-    Only provide the answer from the {context}, nothing else.
-    Add snippets of the context you used to answer the question.
+    If the context is not relevant to the question, answer based on your own knowledge.
+    Always be truthful and clear. If you don't know the answer, just say that you don't know.
     """
+
 
     prompt = ChatPromptTemplate.from_template(template)
 
@@ -189,21 +190,45 @@ def main() -> None:
     """
     st.subheader("🧠 Ollama PDF RAG playground", divider="gray", anchor=False)
 
-    models_info = ollama.list()
-    available_models = extract_model_names(models_info)
-
     col1, col2 = st.columns([1.5, 2])
 
+    # Initialize session state
     if "messages" not in st.session_state:
         st.session_state["messages"] = []
-
     if "vector_db" not in st.session_state:
         st.session_state["vector_db"] = None
 
+    # Get available models with proper attribute access
+    try:
+        models_response = ollama.list()
+        # Use model.model_name instead of model.name
+        available_models = tuple(model["model"] for model in models_response["models"])
+        logger.info(f"Available models: {available_models}")
+    except Exception as e:
+        st.error(f"Error loading models: {str(e)}")
+        logger.error(f"Model loading error: {e}", exc_info=True)
+        available_models = tuple()
+
+    # Debug output to show raw Ollama response
+    try:
+        with st.expander("Debug: Ollama Response"):
+            st.write("Raw Ollama response:", models_response)
+            if models_response and "models" in models_response:
+                st.write("First model details:", models_response["models"][0])
+    except:
+        pass
+
+    # Display model selection
     if available_models:
         selected_model = col2.selectbox(
-            "Pick a model available locally on your system ↓", available_models
+            "Pick a model available locally on your system ↓", 
+            available_models,
+            index=0
         )
+    else:
+        selected_model = None
+        col2.error("No Ollama models found. Please install models using 'ollama pull <model>'")
+
 
     file_upload = col1.file_uploader(
         "Upload a PDF file ↓", type="pdf", accept_multiple_files=False
@@ -245,13 +270,18 @@ def main() -> None:
 
                 with message_container.chat_message("assistant", avatar="🤖"):
                     with st.spinner(":green[processing...]"):
-                        if st.session_state["vector_db"] is not None:
+                        if st.session_state["vector_db"] is not None and selected_model:
                             response = process_question(
-                                prompt, st.session_state["vector_db"], selected_model
+                                prompt, 
+                                st.session_state["vector_db"], 
+                                selected_model
                             )
                             st.markdown(response)
                         else:
-                            st.warning("Please upload a PDF file first.")
+                            if not selected_model:
+                                st.warning("Please select a valid model first")
+                            else:
+                                st.warning("Please upload a PDF file first.")
 
                 if st.session_state["vector_db"] is not None:
                     st.session_state["messages"].append(
